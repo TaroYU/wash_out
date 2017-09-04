@@ -60,11 +60,9 @@ ActionController::Metal.class_eval do
 end
 
 if Rails::VERSION::MAJOR >= 5
-  if defined?(ActionView::Rendering)
-    module ActionController
-      module ApiRendering
-        include ActionView::Rendering
-      end
+  module ActionController
+    module ApiRendering
+      include ActionView::Rendering
     end
   end
 

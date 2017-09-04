@@ -3,7 +3,7 @@ module WashOutHelper
   def wsdl_data_options(param)
     case controller.soap_config.wsdl_style
     when 'rpc'
-      if param.map.present? || !param.value.nil?
+      if param.map.present? || param.value
         { :"xsi:type" => param.namespaced_type }
       else
         { :"xsi:nil" => true }
@@ -42,7 +42,9 @@ module WashOutHelper
             xml.tag! tag_name, param_options.merge(attrs), &blk
           end
         else
-          xml.tag! tag_name, param_options do
+          # xml.tag! {tag_name}, param_options do
+          # //增加命名空间
+          xml.tag! "tns:#{tag_name}", param_options do
             wsdl_data(xml, param.map)
           end
         end
@@ -78,7 +80,7 @@ module WashOutHelper
           if elems.any?
             xml.tag! "xsd:sequence" do
               elems.each do |value|
-                xml.tag! "xsd:element", wsdl_occurence(value, false, :name => value.name, :type => value.namespaced_type)
+                xml.tag! "xsd:element", wsdl_occurence1(value, false, :name => value.name, :type => value.namespaced_type)
               end
             end
           end
@@ -92,6 +94,15 @@ module WashOutHelper
       elsif !param.classified?
         raise RuntimeError, "Duplicate use of `#{param.basic_type}` type name. Consider using classified types."
       end
+
+      # 手动写element
+      if !param.multiplied
+      xml.tag! "xsd:element", wsdl_occurence(param, false, :name => param.basic_type, :type => param.namespaced_type)
+      end
+
+      # more.each do |value|
+      #           xml.tag! "xsd:element", wsdl_occurence(value, false, :name => value.name, :type => value.namespaced_type)
+      #   end
     end
 
     more.each do |p|
@@ -99,11 +110,75 @@ module WashOutHelper
     end
   end
 
+  def wsdl_type_user(xml, param, defined=[])
+    more = []
+
+    if param.struct?
+      if !defined.include?(param.basic_type)
+        xml.tag! "xs:complexType", :name => param.basic_type do
+          attrs, elems = [], []
+          param.map.each do |value|
+            more << value if value.struct?
+            if value.attribute?
+              attrs << value
+            else
+              elems << value
+            end
+          end
+
+          if elems.any?
+            xml.tag! "xs:sequence" do
+              elems.each do |value|
+                xml.tag! "xs:element", wsdl_occurence1(value, false, :name => value.name, :type => value.namespaced_type)
+              end
+            end
+          end
+
+          attrs.each do |value|
+            xml.tag! "xs:attribute", wsdl_occurence(value, false, :name => value.attr_name, :type => value.namespaced_type)
+          end
+        end
+
+        defined << param.basic_type
+      elsif !param.classified?
+        raise RuntimeError, "Duplicate use of `#{param.basic_type}` type name. Consider using classified types."
+      end
+
+      # 手动写element
+      # if !param.multiplied
+      # xml.tag! "xsd:element", wsdl_occurence(param, false, :name => param.basic_type, :type => param.namespaced_type)
+      # end
+
+      # more.each do |value|
+      #           xml.tag! "xsd:element", wsdl_occurence(value, false, :name => value.name, :type => value.namespaced_type)
+      #   end
+    end
+
+    more.each do |p|
+      wsdl_type_user xml, p, defined
+    end
+  end
+
   def wsdl_occurence(param, inject, extend_with = {})
-    data = {"#{'xsi:' if inject}nillable" => 'true'}
+    # data = {"#{'xsi:' if inject}nillable" => 'true'}
+    data ={}
     if param.multiplied
       data["#{'xsi:' if inject}minOccurs"] = 0
       data["#{'xsi:' if inject}maxOccurs"] = 'unbounded'
+      # else
+      # data["#{'xsi:' if inject}minOccurs"] = 0
+    end
+    extend_with.merge(data)
+  end
+
+  def wsdl_occurence1(param, inject, extend_with = {})
+    # data = {"#{'xsi:' if inject}nillable" => 'true'}
+    data ={}
+    if param.multiplied
+      data["#{'xsi:' if inject}minOccurs"] = 0
+      data["#{'xsi:' if inject}maxOccurs"] = 'unbounded'
+      else
+      data["#{'xsi:' if inject}minOccurs"] = 0
     end
     extend_with.merge(data)
   end

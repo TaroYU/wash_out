@@ -10,6 +10,11 @@ module WashOut
       @param_map = value
     end
 
+    def self.user_map(value)
+      raise RuntimeError, "Wrong definition: #{value.inspect}" unless value.is_a?(Hash)
+      @param_map = value.values.first
+    end
+
     def self.wash_out_param_map
       @param_map
     end

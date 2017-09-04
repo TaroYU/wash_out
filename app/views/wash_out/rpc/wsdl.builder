@@ -1,8 +1,9 @@
+userAPI_flag = @namespace.include?("provisioning") ? true : false
 xml.instruct!
 xml.definitions 'xmlns' => 'http://schemas.xmlsoap.org/wsdl/',
                 'xmlns:tns' => @namespace,
                 'xmlns:soap' => 'http://schemas.xmlsoap.org/wsdl/soap/',
-                'xmlns:xsd' => 'http://www.w3.org/2001/XMLSchema',
+                userAPI_flag ? 'xmlns:xs' : 'xmlns:xsd' => 'http://www.w3.org/2001/XMLSchema',
                 'xmlns:xsi' => 'http://www.w3.org/2001/XMLSchema-instance',
                 'xmlns:soap-enc' => 'http://schemas.xmlsoap.org/soap/encoding/',
                 'xmlns:wsdl' => 'http://schemas.xmlsoap.org/wsdl/',
@@ -13,7 +14,11 @@ xml.definitions 'xmlns' => 'http://schemas.xmlsoap.org/wsdl/',
       defined = []
       @map.each do |operation, formats|
         (formats[:in] + formats[:out]).each do |p|
-          wsdl_type xml, p, defined
+          if userAPI_flag
+            wsdl_type_user xml, p, defined
+          else
+            wsdl_type xml, p, defined
+          end
         end
       end
     end
@@ -32,7 +37,7 @@ xml.definitions 'xmlns' => 'http://schemas.xmlsoap.org/wsdl/',
     end
   end
 
-  xml.portType :name => "#{@name}_port" do
+  xml.portType :name => "ProvisioningWSServicePortType" do
     @map.each do |operation, formats|
       xml.operation :name => operation do
         xml.input :message => "tns:#{operation}"
@@ -41,7 +46,7 @@ xml.definitions 'xmlns' => 'http://schemas.xmlsoap.org/wsdl/',
     end
   end
 
-  xml.binding :name => "#{@name}_binding", :type => "tns:#{@name}_port" do
+  xml.binding :name => "ProvisioningWSServiceSoap12Binding", :type => "tns:ProvisioningWSServicePortType" do
     xml.tag! "soap:binding", :style => 'rpc', :transport => 'http://schemas.xmlsoap.org/soap/http'
     @map.keys.each do |operation|
       xml.operation :name => operation do
@@ -60,8 +65,8 @@ xml.definitions 'xmlns' => 'http://schemas.xmlsoap.org/wsdl/',
     end
   end
 
-  xml.service :name => "service" do
-    xml.port :name => "#{@name}_port", :binding => "tns:#{@name}_binding" do
+  xml.service :name => "ProvisioningWSService" do
+    xml.port :name => "ProvisioningWSServiceHttpSoap12Endpoint", :binding => "tns:ProvisioningWSServiceSoap12Binding" do
       xml.tag! "soap:address", :location => WashOut::Router.url(request, @name)
     end
   end

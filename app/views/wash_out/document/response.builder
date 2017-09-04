@@ -10,8 +10,9 @@ xml.tag! "soap:Envelope", "xmlns:soap" => 'http://schemas.xmlsoap.org/soap/envel
     end
   end
   xml.tag! "soap:Body" do
-    xml.tag! "tns:#{@action_spec[:response_tag]}" do
+    # //去掉反馈中<tns:xx_response></tns>这一层
+    # xml.tag! "tns:#{@action_spec[:response_tag]}" do
       wsdl_data xml, result
-    end
+    # end
   end
 end

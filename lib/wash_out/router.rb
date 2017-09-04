@@ -14,7 +14,7 @@ module WashOut
 
         app = x.app
         app = app.app if app.respond_to?(:app)
-        if app.respond_to?(:routes) && app.routes.respond_to?(:routes)
+        if app.respond_to?(:routes)
           lookup_soap_routes(controller_name, app.routes.routes, path+[x], &block)
         end
       end
@@ -31,9 +31,6 @@ module WashOut
           routes.map{|x| x.format({})}                           # Rails 3.2
         end
 
-        if Rails.application.config.relative_url_root.present?
-          path.prepend Rails.application.config.relative_url_root
-        end
         return request.protocol + request.host_with_port + path.flatten.join('')
       end
     end
@@ -47,28 +44,32 @@ module WashOut
     end
 
     def parse_soap_action(env)
-      return env['wash_out.soap_action'] if env['wash_out.soap_action']
+      request_action = env['wash_out.soap_action']
+      if request_action && request_action.is_a?(String) && request_action.include?("urn:")
+        return request_action.split(":").last
+      # return env['wash_out.soap_action'] if env['wash_out.soap_action']
+      else
+        soap_action = controller.soap_config.soap_action_routing ? env['HTTP_SOAPACTION'].to_s.gsub(/^"(.*)"$/, '\1') : ''
+        soap_action = 'addAccount' if soap_action == ''
+        if soap_action.blank?
+          parsed_soap_body = nori(controller.soap_config.snakecase_input).parse(soap_body env)
+          return nil if parsed_soap_body.blank?
 
-      soap_action = controller.soap_config.soap_action_routing ? env['HTTP_SOAPACTION'].to_s.gsub(/^"(.*)"$/, '\1')
-                                                               : ''
-      if soap_action.blank?
-        parsed_soap_body = nori(controller.soap_config.snakecase_input).parse(soap_body env)
-        return nil if parsed_soap_body.blank?
+          soap_action = parsed_soap_body.values_at(:envelope, :Envelope).try(:compact).try(:first)
+          soap_action = soap_action.values_at(:body, :Body).try(:compact).try(:first) if soap_action
+          soap_action = soap_action.keys.first.to_s if soap_action
+        end
 
-        soap_action = parsed_soap_body.values_at(:envelope, :Envelope).try(:compact).try(:first)
-        soap_action = soap_action.values_at(:body, :Body).try(:compact).try(:first) if soap_action
-        soap_action = soap_action.keys.first.to_s if soap_action
+        # RUBY18 1.8 does not have force_encoding.
+        soap_action.force_encoding('UTF-8') if soap_action.respond_to? :force_encoding
+
+        if controller.soap_config.namespace
+          namespace = Regexp.escape controller.soap_config.namespace.to_s
+          soap_action.gsub!(/^(#{namespace}(\/|#)?)?([^"]*)$/, '\3')
+        end
+
+        env['wash_out.soap_action'] = soap_action
       end
-
-      # RUBY18 1.8 does not have force_encoding.
-      soap_action.force_encoding('UTF-8') if soap_action.respond_to? :force_encoding
-
-      if controller.soap_config.namespace
-        namespace = Regexp.escape controller.soap_config.namespace.to_s
-        soap_action.gsub!(/^(#{namespace}(\/|#)?)?([^"]*)$/, '\3')
-      end
-
-      env['wash_out.soap_action'] = soap_action
     end
 
     def nori(snakecase=false)
@@ -106,7 +107,9 @@ module WashOut
 
     def call(env)
       @controller = @controller_name.constantize
-
+      # 先调用一遍完成取值
+      parse_soap_action(env)
+      # 参数处理
       soap_action = parse_soap_action(env)
 
       action = if soap_action.blank?

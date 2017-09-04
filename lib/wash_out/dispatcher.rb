@@ -192,12 +192,7 @@ module WashOut
       controller.send :"before_#{entity}", :_authenticate_wsse,   :if => :soap_action?
       controller.send :"before_#{entity}", :_map_soap_parameters, :if => :soap_action?
       controller.send :"before_#{entity}", :_map_soap_headers, :if => :soap_action?
-
-      if defined?(Rails::VERSION::MAJOR) && (Rails::VERSION::MAJOR >= 5)
-        controller.send :"skip_before_#{entity}", :verify_authenticity_token, :raise => false
-      else
-        controller.send :"skip_before_#{entity}", :verify_authenticity_token
-      end
+      controller.send :"skip_before_#{entity}", :verify_authenticity_token, :raise => false
     end
 
     def self.deep_select(collection, result=[], &blk)
@@ -245,11 +240,22 @@ module WashOut
     end
 
     def soap_action
-      request.env['wash_out.soap_action']
+      request_action = request.env['wash_out.soap_action']
+      if request_action && request_action.is_a?(String) && request_action.include?("urn:")
+        request_action.split(":").last
+      else
+        request_action
+      end
     end
 
     def xml_data
       envelope = request.env['wash_out.soap_data'].values_at(:envelope, :Envelope).compact.first
+      return {} if envelope.blank?
+      if !envelope.is_a? Hash
+        str = envelope.gsub('xmlns:ns2="http://provisioning.idm.shenhua.com"','').gsub('xmlns:ns1="http://provisioning.idm.shenhua.com/xsd"','')
+        parser = Nori.new(:convert_tags_to => lambda { |tag| tag.snakecase.to_sym })
+        envelope = parser.parse str
+      end
       xml_data = envelope.values_at(:body, :Body).compact.first || {}
       return xml_data if soap_config.wsdl_style == "document"
       xml_data = xml_data.values_at(soap_action.underscore.to_sym, soap_action.to_sym, request_input_tag.to_sym).compact.first || {}
@@ -257,6 +263,12 @@ module WashOut
 
     def xml_header_data
       envelope = request.env['wash_out.soap_data'].values_at(:envelope, :Envelope).compact.first
+      return {} if envelope.blank?
+      if !envelope.is_a? Hash
+        str = envelope.gsub('xmlns:ns2="http://provisioning.idm.shenhua.com"','').gsub('xmlns:ns1="http://provisioning.idm.shenhua.com/xsd"','')
+        parser = Nori.new(:convert_tags_to => lambda { |tag| tag.snakecase.to_sym })
+        envelope = parser.parse str
+      end
       header_data = envelope.values_at(:header, :Header).compact.first || {}
     end
 

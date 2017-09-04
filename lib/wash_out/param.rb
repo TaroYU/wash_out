@@ -113,7 +113,11 @@ module WashOut
 
     # Returns a WSDL namespaced identifier for this type.
     def namespaced_type
-      struct? ? "tns:#{basic_type}" : "xsd:#{xsd_type}"
+      if @soap_config.config[:namespace].include?("provisioning")
+        struct? ? "tns:#{basic_type}" : "xs:#{xsd_type}"
+      else
+        struct? ? "tns:#{basic_type}" : "xsd:#{xsd_type}"
+      end
     end
 
     # Parses a +definition+. The format of the definition is best described
